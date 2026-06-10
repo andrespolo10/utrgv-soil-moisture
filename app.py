@@ -37,7 +37,7 @@ st.markdown("""
         background-color: #E05E00 !important;
     }
     </style>
-""", unsafe_allowed_html=True)
+""", unsafe_allow_html=True)
 
 # Encabezado Institucional
 st.markdown("""
@@ -45,7 +45,7 @@ st.markdown("""
         <div class="utrgv-title">🍊 UTRGV Soil Moisture Scaling Tool</div>
         <div class="utrgv-subtitle">School of Earth, Environmental, and Marine Sciences | ACIS & D³ Data Hub</div>
     </div>
-""", unsafe_allowed_html=True)
+""", unsafe_allow_html=True)
 
 # --- MOTOR DE CONSULTA MULTI-PROGRAMA (NASA, USDA, ACIS, D³) ---
 def obtener_datos_climatologicos(lat, lon):
