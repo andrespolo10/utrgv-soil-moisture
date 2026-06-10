@@ -80,8 +80,8 @@ if 'punto_control' not in st.session_state:
 if 'resultados_globales' not in st.session_state:
     st.session_state['resultados_globales'] = None
 
-# DISEÑO EN DOS COLUMNAS
-col_izquierda, col_derecha = st.columns()
+# DISEÑO EN DOS COLUMNAS - Corregido aquí pasándole un 2 explícito
+col_izquierda, col_derecha = st.columns(2)
 
 with col_izquierda:
     st.header("🎯 1. Calibración en Campo (TDR 150)")
