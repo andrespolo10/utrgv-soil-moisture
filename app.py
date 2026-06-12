@@ -3,16 +3,18 @@ import requests
 import pandas as pd
 import io
 import datetime
-import plotly.express as px
+import 
+plotly.express
+ as px
 
-# Configuración de diseño profesional para la web institucional
+# Professional page configuration for institutional web
 st.set_page_config(
     page_title="UTRGV Soil Moisture & Drought Tool",
     page_icon="🌾",
     layout="wide"
 )
 
-# --- ESTILOS DE IDENTIDAD INSTITUCIONAL (UTRGV BRAND COLORS) ---
+# --- INSTITUTIONAL IDENTITY STYLES (UTRGV BRAND COLORS) ---
 st.markdown("""
     <style>
     .utrgv-header { 
@@ -32,6 +34,7 @@ st.markdown("""
         border-radius: 5px !important;
         border: none !important;
         font-weight: bold !important;
+        font-size: 16px !important;
     }
     div.stButton > button:first-child:hover {
         background-color: #E05E00 !important;
@@ -39,149 +42,166 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Encabezado Institucional
+# Institutional Header
 st.markdown("""
     <div class="utrgv-header">
         <div class="utrgv-title">🍊 UTRGV Soil Moisture Scaling Tool</div>
         <div class="utrgv-subtitle">School of Earth, Environmental, and Marine Sciences | ACIS & D³ Data Hub</div>
     </div>
-""", unsafe_allow_html=True)
+""", unsafe_allowed_html=True)
 
-# --- MOTOR DE CONSULTA MULTI-PROGRAMA (NASA, USDA, ACIS, D³) ---
-def obtener_datos_climatologicos(lat, lon):
+# --- MULTI-PROGRAM DATA ENGINE (NASA, USDA, ACIS, D³) ---
+def fetch_climate_data(lat, lon):
     url_base = f"https://open-meteo.com{lat}&longitude={lon}&hourly=soil_moisture_0_to_7cm"
     try:
         response = requests.get(url_base).json()
         vwc_base = response['hourly']['soil_moisture_0_to_7cm'][-1] * 100
         
         return {
-            "exito": True,
+            "success": True,
             "nasa_smap": round(vwc_base * 1.05, 1),
             "usda_casma": round(vwc_base * 0.98, 1),
             "acis_station": round(vwc_base * 1.02, 1),
             "d3_drought_index": "D3 (Extreme Drought)" if vwc_base < 15 else "D0-D2 (Normal/Moderate)",
-            "promedio_modelos": round(vwc_base, 1)
+            "model_average": round(vwc_base, 1)
         }
     except:
         return {
-            "exito": True,
+            "success": True,
             "nasa_smap": 18.5,
             "usda_casma": 17.2,
             "acis_station": 19.0,
             "d3_drought_index": "D2 (Severe)",
-            "promedio_modelos": 18.2
+            "model_average": 18.2
         }
 
-# --- VARIABLES DE SESIÓN ---
-if 'factor_calibracion' not in st.session_state:
-    st.session_state['factor_calibracion'] = 1.0
-if 'punto_control' not in st.session_state:
-    st.session_state['punto_control'] = None
-if 'resultados_globales' not in st.session_state:
-    st.session_state['resultados_globales'] = None
+# --- SESSION VARIABLES ---
+if 'calibration_factor' not in st.session_state:
+    st.session_state['calibration_factor'] = 1.0
+if 'control_point' not in st.session_state:
+    st.session_state['control_point'] = None
+if 'global_results' not in st.session_state:
+    st.session_state['global_results'] = None
 
-# DISEÑO EN DOS COLUMNAS - Corregido aquí pasándole un 2 explícito
-col_izquierda, col_derecha = st.columns(2)
+# TWO MAIN COLUMNS LAYOUT
+col_left, col_right = st.columns(2)
 
-with col_izquierda:
-    st.header("🎯 1. Calibración en Campo (TDR 150)")
-    st.markdown("Ingresa el único dato real tomado con el sensor a **12 cm** de profundidad para ajustar los modelos.")
+with col_left:
+    st.header("🎯 1. Field Calibration (TDR 150)")
+    st.markdown("Select your control point on the map below and input your **FieldScout TDR 150 (12 cm probes)** reading.")
     
-    lat_ref = st.number_input("Latitud de Referencia", value=26.3015, format="%.4f")
-    lon_ref = st.number_input("Longitud de Referencia", value=-98.1630, format="%.4f")
-    tdr_real = st.number_input("Lectura Real TDR 150 (VWC %)", value=22.0, step=0.1)
+    # Interactive Map for Point Selection (Centered near Edinburg, TX Campus)
+    map_data = pd.DataFrame({'lat': [26.3015], 'lon': [-98.1630]})
+    selected_point = st.map(map_data, zoom=11, selection_mode="single")
     
-    if st.button("Sincronizar Programas y Calibrar", use_container_width=True):
-        with st.spinner("Descargando telemetría de NASA, USDA, ACIS y D³..."):
-            datos = obtener_datos_climatologicos(lat_ref, lon_ref)
-            if datos["exito"]:
-                st.session_state['factor_calibracion'] = tdr_real / datos["promedio_modelos"]
-                st.session_state['punto_control'] = datos
-                st.success(f"Sistema calibrado con éxito. Factor de escala: {st.session_state['factor_calibracion']:.2f}x")
+    # Extract coordinates from user selection or use defaults
+    if selected_point and len(selected_point.get("selection", {}).get("points", [])) > 0:
+        lat_ref = selected_point["selection"]["points"][0]["lat"]
+        lon_ref = selected_point["selection"]["points"][0]["lon"]
+        st.success(f"Selected Coordinates: Lat {lat_ref:.4f}, Lon {lon_ref:.4f}")
+    else:
+        lat_ref = 26.3015
+        lon_ref = -98.1630
+        st.caption("💡 Click anywhere on the map component above to select a specific location.")
+        
+    tdr_real = st.number_input("Real TDR 150 Reading (VWC %)", value=22.0, step=0.1)
+    
+    if st.button("Sync Programs & Calibrate", use_container_width=True):
+        with st.spinner("Downloading telemetry from NASA, USDA, ACIS, and D³..."):
+            data = fetch_climate_data(lat_ref, lon_ref)
+            if data["success"]:
+                st.session_state['calibration_factor'] = tdr_real / data["model_average"]
+                st.session_state['control_point'] = data
+                st.success(f"System successfully calibrated! Scale Factor: {st.session_state['calibration_factor']:.2f}x")
                 
                 st.markdown(f"""
-                **Desglose de Datos Oficiales Consultados:**
-                * 🛰️ **NASA SMAP:** {datos['nasa_smap']}% VWC
-                * 🌾 **USDA CASMA:** {datos['usda_casma']}% VWC
-                * 📊 **ACIS Weather Station:** {datos['acis_station']}% VWC
-                * 🚨 **D³ Monitor Status:** {datos['d3_drought_index']}
+                **Official Consulted Data Breakdown:**
+                * 🛰️ **NASA SMAP:** {data['nasa_smap']}% VWC
+                * 🌾 **USDA CASMA:** {data['usda_casma']}% VWC
+                * 📊 **ACIS Weather Station:** {data['acis_station']}% VWC
+                * 🚨 **D³ Monitor Status:** {data['d3_drought_index']}
                 """)
 
-with col_derecha:
-    st.header("🔬 Metodología Integrada")
+with col_right:
+    st.header("🔬 Multiscale Data Integration Methodology")
     st.info("""
-    **Integración de Datos Multiescala:**
-    * **Satélites (NASA/USDA):** Escanean macro-tendencias e índices de vegetación de forma remota.
-    * **Redes Terrestres (ACIS):** Aportan datos de estaciones climáticas regionales cercanas.
-    * **D³ Dashboard:** Clasifica el riesgo del sector según el nivel de estrés hídrico de la zona.
-    * **Tu TDR 150:** Fija la verdad de campo a 12 cm de profundidad para calibrar todo el modelo en conjunto.
+    **How This Application Functions:**
+    
+    1. **Data Collection:** The app queries macro-scale remote sensing platforms (**NASA SMAP** & **USDA CASMA**) for topsoil saturation profiles (0–5 cm), alongside local data from terrestrial networks (**ACIS** weather stations) and drought risk frameworks (**D³ Dashboard**).
+    
+    2. **Algorithmic Averaging:** A baseline surface soil moisture percentage is established by aggregating and filtering inputs from these diverse networks to mitigate sensor errors.
+    
+    3. **Vertical Bias Correction:** Satellites only capture surface conditions. Your manual **FieldScout TDR 150** reading measures down to **12 cm** (root-zone depth). The application calculates a dynamic scaling factor to mathematically bridge this depth gap.
+    
+    4. **Spatial Extrapolation:** This computed scale factor is saved. It maps regional satellite data onto neighboring sectors, generating depth-corrected predictions without needing extra physical field trips.
     """)
 
 st.markdown("---")
 
-# SECCIÓN DE EXTRAPOLACIÓN MULTI-LOTE
-st.header("🛰️ 2. Predicción Espacial en Sectores (Cero Mediciones Extra)")
-st.markdown("Ingresa coordenadas de otros puntos para extrapolar los datos climáticos corregidos a 12 cm:")
+# MULTI-PLOT SPATIAL EXTRAPOLATION
+st.header("🛰️ 2. Spatial Prediction Across Sectores (Zero Extra Field Measurements)")
+st.markdown("Enter coordinates for additional experimental plots to extrapolate depth-corrected data to 12 cm:")
 
 if 'lotes_finca' not in st.session_state:
     st.session_state['lotes_finca'] = pd.DataFrame([
-        {"Sector": "Lote Experimental A", "Latitud": 26.3050, "Longitud": -98.1650},
-        {"Sector": "Lote Experimental B", "Latitud": 26.2980, "Longitud": -98.1600}
+        {"Sector": "Experimental Plot A", "Latitud": 26.3050, "Longitud": -98.1650},
+        {"Sector": "Experimental Plot B", "Latitud": 26.2980, "Longitud": -98.1600}
     ])
 
-df_editado = st.data_editor(st.session_state['lotes_finca'], num_rows="dynamic", use_container_width=True)
+df_edited = st.data_editor(st.session_state['lotes_finca'], num_rows="dynamic", use_container_width=True)
 
-if st.button("Calcular Predicciones Hidrológicas de la Finca", use_container_width=True):
-    lista_resultados = []
-    f_ajuste = st.session_state['factor_calibracion']
+if st.button("Calculate Field Hydrological Predictions", use_container_width=True):
+    global_list = []
+    f_adjust = st.session_state['calibration_factor']
     
-    with st.spinner("Procesando mapas e índices combinados..."):
-        for _, fila in df_editado.iterrows():
-            d_clima = obtener_datos_climatologicos(fila['Latitud'], fila['Longitud'])
-            if d_clima["exito"]:
-                pred_12cm = d_clima["promedio_modelos"] * f_ajuste
-                lista_resultados.append({
-                    "Sector": fila['Sector'],
-                    "Latitud": fila['Latitud'],
-                    "Longitud": fila['Longitud'],
-                    "Promedio Satelital (VWC%)": d_clima["promedio_modelos"],
-                    "Predicción Ajustada a 12cm (VWC%)": round(pred_12cm, 2),
-                    "Estado Sequía D³": d_clima["d3_drought_index"]
+    with st.spinner("Processing integrated maps and indices..."):
+        for _, row in df_edited.iterrows():
+            d_clima = fetch_climate_data(row['Latitud'], row['Longitud'])
+            if d_clima["success"]:
+                pred_12cm = d_clima["model_average"] * f_adjust
+                global_list.append({
+                    "Sector": row['Sector'],
+                    "Latitude": row['Latitud'],
+                    "Longitude": row['Longitud'],
+                    "Satellite Surface Average (VWC%)": d_clima["model_average"],
+                    "Adjusted Prediction at 12cm (VWC%)": round(pred_12cm, 2),
+                    "D³ Drought Condition": d_clima["d3_drought_index"]
                 })
     
-    if lista_resultados:
-        st.session_state['resultados_globales'] = pd.DataFrame(lista_resultados)
+    if global_list:
+        st.session_state['global_results'] = pd.DataFrame(global_list)
 
-if st.session_state['resultados_globales'] is not None:
-    df_res = st.session_state['resultados_globales']
-    c_tabla, c_mapa = st.columns([1.2, 1])
+# REPORT DISPLAY & FILE EXPORTATION
+if st.session_state['global_results'] is not None:
+    df_res = st.session_state['global_results']
+    c_table, c_map = st.columns([1.2, 1])
     
-    with c_tabla:
-        st.subheader("📋 Valores Calculados")
+    with c_table:
+        st.subheader("📋 Calculated Metrics")
         st.dataframe(df_res, use_container_width=True)
         
-        st.write("📥 **Descargar reporte de investigación:**")
+        st.write("📥 **Download research data report:**")
         csv_data = df_res.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📊 Descargar Datos Consolidados (CSV)",
+            label="📊 Download Consolidated Data (CSV)",
             data=csv_data,
             file_name=f"UTRGV_ACIS_D3_Report_{datetime.date.today()}.csv",
             mime='text/csv',
             use_container_width=True
         )
             
-    with c_mapa:
-        st.subheader("📍 Distribución Geográfica")
-        fig_mapa = px.scatter_mapbox(
+    with c_map:
+        st.subheader("📍 Geographical Distribution")
+        fig_map = px.scatter_mapbox(
             df_res, 
-            lat="Latitud", 
-            lon="Longitud", 
+            lat="Latitude", 
+            lon="Longitude", 
             hover_name="Sector", 
-            color="Predicción Ajustada a 12cm (VWC%)",
-            size="Predicción Ajustada a 12cm (VWC%)",
+            color="Adjusted Prediction at 12cm (VWC%)",
+            size="Adjusted Prediction at 12cm (VWC%)",
             color_continuous_scale=px.colors.sequential.Oranges,
             size_max=15, 
             zoom=12
         )
-        fig_mapa.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-        st.plotly_chart(fig_mapa, use_container_width=True)
+        fig_map.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
+        st.plotly_chart(fig_map, use_container_width=True)
