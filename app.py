@@ -74,7 +74,6 @@ def fetch_climate_data(lat, lon):
         }
 
 # --- SESSION VARIABLES ---
-# Fixed baseline multiplier assignment (1.21x depth scale adjustment)
 if 'calibration_factor' not in st.session_state:
     st.session_state['calibration_factor'] = 1.21
 if 'control_point' not in st.session_state:
@@ -172,7 +171,7 @@ col_map_big, col_stats = st.columns(2)
 with col_map_big:
     st.subheader("🗺️ Remote Sensing Spatial Coverage Grid Cell")
     
-    # Draws a closed bounding box polygon line
+    # Draw the boundary line matching version parameters safely
     fig_poly = px.line_mapbox(
         df_polygon,
         lat="Latitude",
@@ -181,14 +180,18 @@ with col_map_big:
         zoom=11,
         height=500
     )
-    # Adds a distinct center point tracking anchor point
-    fig_poly.add_trace(px.scatter_mapbox(
+    
+    # Add a clean secondary scatter element layer using add_traces
+    fig_center = px.scatter_mapbox(
         df_center, 
         lat="Latitude", 
         lon="Longitude", 
-        hover_name="Point",
-        color_discrete_sequence=["#FF6B00"]
-    ).data)
+        hover_name="Point"
+    )
+    fig_center.update_traces(marker=dict(size=14, color="#FF6B00"))
+    
+    # Merge traces securely
+    fig_poly.add_traces(fig_center.data)
     
     fig_poly.update_layout(
         mapbox_style="open-street-map",
@@ -199,7 +202,6 @@ with col_map_big:
 with col_stats:
     st.subheader("📋 Grid Telemetry Analysis")
     
-    # Presentation metric fields tracking dynamic calculation state
     st.metric(label="Calculated Drought Boundary Status (D³)", value=current_drought)
     st.metric(label="Integrated Remote Sensing Surface VWC", value=f"{avg_surface_moisture}%")
     st.metric(label="Depth-Corrected Calibration Multiplier", value=f"{st.session_state['calibration_factor']:.2f}x")
@@ -214,7 +216,6 @@ with col_stats:
       * West Limit: `""" + f"{base_lon - offset:.4f}" + """`
     """)
     
-    # CSV generation export button setup
     csv_poly_data = df_polygon.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Polygon Bounding Box Vectors (CSV)",
