@@ -60,7 +60,7 @@ def fetch_climate_data(lat, lon):
             "nasa_smap": round(vwc_base * 1.05, 1),
             "usda_casma": round(vwc_base * 0.98, 1),
             "acis_station": round(vwc_base * 1.02, 1),
-            "d3_drought_index": "D3 (Extreme Drought)" if vwc_base < 15 else "D0-D2 (Normal/Moderate)",
+            "d3_drought_index": "D3 (Extreme Drought)" if vwc_base < 15 else "D2 (Severe Drought)" if vwc_base < 22 else "D0-D1 (Normal/Moderate)",
             "model_average": round(vwc_base, 1)
         }
     except:
@@ -69,7 +69,7 @@ def fetch_climate_data(lat, lon):
             "nasa_smap": 18.5,
             "usda_casma": 17.2,
             "acis_station": 19.0,
-            "d3_drought_index": "D2 (Severe)",
+            "d3_drought_index": "D2 (Severe Drought)",
             "model_average": 18.2
         }
 
@@ -78,8 +78,6 @@ if 'calibration_factor' not in st.session_state:
     st.session_state['calibration_factor'] = 1.0
 if 'control_point' not in st.session_state:
     st.session_state['control_point'] = None
-if 'global_results' not in st.session_state:
-    st.session_state['global_results'] = None
 if 'last_lat' not in st.session_state:
     st.session_state['last_lat'] = 26.3015
 if 'last_lon' not in st.session_state:
@@ -92,18 +90,17 @@ with col_left:
     st.header("🎯 1. Field Calibration (TDR 150)")
     st.markdown("Set your coordinates below and input your **FieldScout TDR 150 (12 cm probes)** reading.")
     
-    # Clean coordinate selection inputs (Universal Compatibility Mode)
+    # Universal Compatibility Inputs
     lat_ref = st.number_input("Control Point Latitude", value=st.session_state['last_lat'], format="%.4f")
     lon_ref = st.number_input("Control Point Longitude", value=st.session_state['last_lon'], format="%.4f")
     
-    # Save the updated coordinates to session state so part 2 can read them
+    # Session state update listener
     if lat_ref != st.session_state['last_lat'] or lon_ref != st.session_state['last_lon']:
         st.session_state['last_lat'] = lat_ref
         st.session_state['last_lon'] = lon_ref
-        # Force a rerun to update the data editor table below immediately
         st.rerun()
 
-    # Display map visual visualization reference box
+    # Local marker reference map
     map_data = pd.DataFrame({'lat': [lat_ref], 'lon': [lon_ref]})
     st.map(map_data, zoom=11)
         
@@ -141,73 +138,87 @@ with col_right:
 
 st.markdown("---")
 
-# MULTI-PLOT SPATIAL EXTRAPOLATION
-st.header("🛰️ 2. Spatial Prediction Across Sectors (Zero Extra Field Measurements)")
-st.markdown("The table below automatically generates neighboring experimental plots based on your Step 1 location. You can edit them freely:")
+# NEW REWORKED PART 2: REMOTE SENSING REGIONAL DROUGHT POLYGON MAPPING
+st.header("🛰️ 2. Remote Sensing Imagery Analysis & Regional Drought Polygon Mapping")
+st.markdown("Based on the target point evaluated in Step 1, this section maps the macro-scale geographic satellite grid cell (Polygon Pixel Area) alongside remote sensing drought metrics.")
 
-# DYNAMIC TABLE: Generates neighboring plots automatically based on Step 1 coordinates
+# Fetch real-time data for the calculation zone
+if st.session_state['control_point'] is not None:
+    current_drought = st.session_state['control_point']['d3_drought_index']
+    avg_surface_moisture = st.session_state['control_point']['model_average']
+else:
+    # Baseline defaults before calibration button is pressed
+    current_drought = "D2 (Severe Drought)"
+    avg_surface_moisture = 18.2
+
+# Generate localized grid data to draw a polygon shape on Plotly mapbox
+# An offset of ~0.025 degrees roughly matches a high-resolution sub-grid cell size
 base_lat = st.session_state['last_lat']
 base_lon = st.session_state['last_lon']
+offset = 0.025
 
-default_plots = pd.DataFrame([
-    {"Sector": "Experimental Plot A", "Latitud": round(base_lat + 0.0035, 4), "Longitud": round(base_lon - 0.0020, 4)},
-    {"Sector": "Experimental Plot B", "Latitud": round(base_lat - 0.0035, 4), "Longitud": round(base_lon + 0.0030, 4)}
-])
+polygon_points = [
+    {"Point": "North-West Corner", "Latitude": base_lat + offset, "Longitude": base_lon - offset},
+    {"Point": "North-East Corner", "Latitude": base_lat + offset, "Longitude": base_lon + offset},
+    {"Point": "South-East Corner", "Latitude": base_lat - offset, "Longitude": base_lon + offset},
+    {"Point": "South-West Corner", "Latitude": base_lat - offset, "Longitude": base_lon - offset},
+    {"Point": "Control Point Center", "Latitude": base_lat, "Longitude": base_lon}
+]
+df_polygon = pd.DataFrame(polygon_points)
 
-df_edited = st.data_editor(default_plots, num_rows="dynamic", use_container_width=True)
+# Interface components layout for Part 2
+col_map_big, col_stats = st.columns([2, 1])
 
-if st.button("Calculate Field Hydrological Predictions", use_container_width=True):
-    global_list = []
-    f_adjust = st.session_state['calibration_factor']
+with col_map_big:
+    st.subheader("🗺️ Remote Sensing Spatial Coverage Grid Cell")
     
-    with st.spinner("Processing integrated maps and indices..."):
-        for _, row in df_edited.iterrows():
-            d_clima = fetch_climate_data(row['Latitud'], row['Longitud'])
-            if d_clima["success"]:
-                pred_12cm = d_clima["model_average"] * f_adjust
-                global_list.append({
-                    "Sector": row['Sector'],
-                    "Latitude": row['Latitud'],
-                    "Longitude": row['Longitud'],
-                    "Satellite Surface Average (VWC%)": d_clima["model_average"],
-                    "Adjusted Prediction at 12cm (VWC%)": round(pred_12cm, 2),
-                    "D³ Drought Condition": d_clima["d3_drought_index"]
-                })
+    # Render map using mapbox path strings to simulate polygon bounding vectors
+    fig_poly = px.line_mapbox(
+        df_polygon,
+        lat="Latitude",
+        lon="Longitude",
+        hover_name="Point",
+        zoom=11,
+        height=500
+    )
+    # Add data point markers styling and color parameters
+    fig_poly.add_trace(px.scatter_mapbox(
+        df_polygon, 
+        lat="Latitude", 
+        lon="Longitude", 
+        color_discrete_sequence=["#FF6B00"]
+    ).data[0])
     
-    if global_list:
-        st.session_state['global_results'] = pd.DataFrame(global_list)
+    fig_poly.update_layout(
+        mapbox_style="open-street-map",
+        margin={"r":0,"t":0,"l":0,"b":0}
+    )
+    st.plotly_chart(fig_poly, use_container_width=True)
 
-# REPORT DISPLAY & FILE EXPORTATION
-if st.session_state['global_results'] is not None:
-    df_res = st.session_state['global_results']
-    c_table, c_map = st.columns([1.2, 1])
+with col_stats:
+    st.subheader("📋 Grid Telemetry Analysis")
     
-    with c_table:
-        st.subheader("📋 Calculated Metrics")
-        st.dataframe(df_res, use_container_width=True)
-        
-        st.write("📥 **Download research data report:**")
-        csv_data = df_res.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📊 Download Consolidated Data (CSV)",
-            data=csv_data,
-            file_name=f"UTRGV_ACIS_D3_Report_{datetime.date.today()}.csv",
-            mime='text/csv',
-            use_container_width=True
-        )
-            
-    with c_map:
-        st.subheader("📍 Geographical Distribution")
-        fig_map = px.scatter_mapbox(
-            df_res, 
-            lat="Latitude", 
-            lon="Longitude", 
-            hover_name="Sector", 
-            color="Adjusted Prediction at 12cm (VWC%)",
-            size="Adjusted Prediction at 12cm (VWC%)",
-            color_continuous_scale=px.colors.sequential.Oranges,
-            size_max=15, 
-            zoom=12
-        )
-        fig_map.update_layout(mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
-        st.plotly_chart(fig_map, use_container_width=True)
+    # Informative structural presentation metric boxes
+    st.metric(label="Calculated Drought Boundary Status (D³)", value=current_drought)
+    st.metric(label="Integrated Remote Sensing Surface VWC", value=f"{avg_surface_moisture}%")
+    st.metric(label="Depth-Corrected Calibration Multiplier", value=f"{st.session_state['calibration_factor']:.2f}x")
+    
+    st.markdown("""
+    **Remote Sensing Metadata Log:**
+    * **Grid Resolution:** ~9km Pixels (SMAP Match Grid)
+    * **Active Spatial Target Coordinates:** 
+      * North Limit: `""" + f"{base_lat + offset:.4f}" + """`
+      * South Limit: `""" + f"{base_lat - offset:.4f}" + """`
+      * East Limit: `""" + f"{base_lon + offset:.4f}" + """`
+      * West Limit: `""" + f"{base_lon - offset:.4f}" + """`
+    """)
+    
+    # Export system log report option
+    csv_poly_data = df_polygon.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Polygon Bounding Box Vectors (CSV)",
+        data=csv_data if 'csv_data' in locals() else csv_poly_data,
+        file_name=f"UTRGV_Drought_Polygon_Grid_{datetime.date.today()}.csv",
+        mime='text/csv',
+        use_container_width=True
+    )
