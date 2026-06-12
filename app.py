@@ -86,21 +86,15 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     st.header("🎯 1. Field Calibration (TDR 150)")
-    st.markdown("Select your control point on the map below and input your **FieldScout TDR 150 (12 cm probes)** reading.")
+    st.markdown("Set your coordinates below and input your **FieldScout TDR 150 (12 cm probes)** reading.")
     
-    # Interactive Map for Point Selection (Centered near Edinburg, TX Campus)
-    map_data = pd.DataFrame({'lat': [26.3015], 'lon': [-98.1630]})
-    selected_point = st.map(map_data, zoom=11, selection_mode="single")
+    # Clean coordinate selection inputs (Universal Compatibility Mode)
+    lat_ref = st.number_input("Control Point Latitude", value=26.3015, format="%.4f")
+    lon_ref = st.number_input("Control Point Longitude", value=-98.1630, format="%.4f")
     
-    # Extract coordinates from user selection or use defaults
-    if selected_point and len(selected_point.get("selection", {}).get("points", [])) > 0:
-        lat_ref = selected_point["selection"]["points"][0]["lat"]
-        lon_ref = selected_point["selection"]["points"][0]["lon"]
-        st.success(f"Selected Coordinates: Lat {lat_ref:.4f}, Lon {lon_ref:.4f}")
-    else:
-        lat_ref = 26.3015
-        lon_ref = -98.1630
-        st.caption("💡 Click anywhere on the map component above to select a specific location.")
+    # Display map visual visualization reference box
+    map_data = pd.DataFrame({'lat': [lat_ref], 'lon': [lon_ref]})
+    st.map(map_data, zoom=11)
         
     tdr_real = st.number_input("Real TDR 150 Reading (VWC %)", value=22.0, step=0.1)
     
