@@ -80,6 +80,10 @@ if 'control_point' not in st.session_state:
     st.session_state['control_point'] = None
 if 'global_results' not in st.session_state:
     st.session_state['global_results'] = None
+if 'last_lat' not in st.session_state:
+    st.session_state['last_lat'] = 26.3015
+if 'last_lon' not in st.session_state:
+    st.session_state['last_lon'] = -98.1630
 
 # TWO MAIN COLUMNS LAYOUT
 col_left, col_right = st.columns(2)
@@ -89,9 +93,16 @@ with col_left:
     st.markdown("Set your coordinates below and input your **FieldScout TDR 150 (12 cm probes)** reading.")
     
     # Clean coordinate selection inputs (Universal Compatibility Mode)
-    lat_ref = st.number_input("Control Point Latitude", value=26.3015, format="%.4f")
-    lon_ref = st.number_input("Control Point Longitude", value=-98.1630, format="%.4f")
+    lat_ref = st.number_input("Control Point Latitude", value=st.session_state['last_lat'], format="%.4f")
+    lon_ref = st.number_input("Control Point Longitude", value=st.session_state['last_lon'], format="%.4f")
     
+    # Save the updated coordinates to session state so part 2 can read them
+    if lat_ref != st.session_state['last_lat'] or lon_ref != st.session_state['last_lon']:
+        st.session_state['last_lat'] = lat_ref
+        st.session_state['last_lon'] = lon_ref
+        # Force a rerun to update the data editor table below immediately
+        st.rerun()
+
     # Display map visual visualization reference box
     map_data = pd.DataFrame({'lat': [lat_ref], 'lon': [lon_ref]})
     st.map(map_data, zoom=11)
@@ -131,16 +142,19 @@ with col_right:
 st.markdown("---")
 
 # MULTI-PLOT SPATIAL EXTRAPOLATION
-st.header("🛰️ 2. Spatial Prediction Across Sectores (Zero Extra Field Measurements)")
-st.markdown("Enter coordinates for additional experimental plots to extrapolate depth-corrected data to 12 cm:")
+st.header("🛰️ 2. Spatial Prediction Across Sectors (Zero Extra Field Measurements)")
+st.markdown("The table below automatically generates neighboring experimental plots based on your Step 1 location. You can edit them freely:")
 
-if 'lotes_finca' not in st.session_state:
-    st.session_state['lotes_finca'] = pd.DataFrame([
-        {"Sector": "Experimental Plot A", "Latitud": 26.3050, "Longitud": -98.1650},
-        {"Sector": "Experimental Plot B", "Latitud": 26.2980, "Longitud": -98.1600}
-    ])
+# DYNAMIC TABLE: Generates neighboring plots automatically based on Step 1 coordinates
+base_lat = st.session_state['last_lat']
+base_lon = st.session_state['last_lon']
 
-df_edited = st.data_editor(st.session_state['lotes_finca'], num_rows="dynamic", use_container_width=True)
+default_plots = pd.DataFrame([
+    {"Sector": "Experimental Plot A", "Latitud": round(base_lat + 0.0035, 4), "Longitud": round(base_lon - 0.0020, 4)},
+    {"Sector": "Experimental Plot B", "Latitud": round(base_lat - 0.0035, 4), "Longitud": round(base_lon + 0.0030, 4)}
+])
+
+df_edited = st.data_editor(default_plots, num_rows="dynamic", use_container_width=True)
 
 if st.button("Calculate Field Hydrological Predictions", use_container_width=True):
     global_list = []
