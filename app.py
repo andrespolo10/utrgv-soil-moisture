@@ -74,8 +74,9 @@ def fetch_climate_data(lat, lon):
         }
 
 # --- SESSION VARIABLES ---
+# Fixed baseline multiplier assignment (1.21x depth scale adjustment)
 if 'calibration_factor' not in st.session_state:
-    st.session_state['calibration_factor'] = 1.0
+    st.session_state['calibration_factor'] = 1.21
 if 'control_point' not in st.session_state:
     st.session_state['control_point'] = None
 if 'last_lat' not in st.session_state:
@@ -138,7 +139,7 @@ with col_right:
 
 st.markdown("---")
 
-# NEW REWORKED PART 2: REMOTE SENSING REGIONAL DROUGHT POLYGON MAPPING
+# PART 2: REMOTE SENSING REGIONAL DROUGHT POLYGON MAPPING
 st.header("🛰️ 2. Remote Sensing Imagery Analysis & Regional Drought Polygon Mapping")
 st.markdown("Based on the target point evaluated in Step 1, this section maps the macro-scale geographic satellite grid cell (Polygon Pixel Area) alongside remote sensing drought metrics.")
 
@@ -147,12 +148,10 @@ if st.session_state['control_point'] is not None:
     current_drought = st.session_state['control_point']['d3_drought_index']
     avg_surface_moisture = st.session_state['control_point']['model_average']
 else:
-    # Baseline defaults before calibration button is pressed
     current_drought = "D2 (Severe Drought)"
     avg_surface_moisture = 18.2
 
-# Generate localized grid data to draw a polygon shape on Plotly mapbox
-# An offset of ~0.025 degrees roughly matches a high-resolution sub-grid cell size
+# Closed Bounding Polygon Path Geometry
 base_lat = st.session_state['last_lat']
 base_lon = st.session_state['last_lon']
 offset = 0.025
@@ -162,17 +161,18 @@ polygon_points = [
     {"Point": "North-East Corner", "Latitude": base_lat + offset, "Longitude": base_lon + offset},
     {"Point": "South-East Corner", "Latitude": base_lat - offset, "Longitude": base_lon + offset},
     {"Point": "South-West Corner", "Latitude": base_lat - offset, "Longitude": base_lon - offset},
-    {"Point": "Control Point Center", "Latitude": base_lat, "Longitude": base_lon}
+    {"Point": "North-West Corner (Close)", "Latitude": base_lat + offset, "Longitude": base_lon - offset}
 ]
 df_polygon = pd.DataFrame(polygon_points)
+df_center = pd.DataFrame([{"Point": "Control Point Center", "Latitude": base_lat, "Longitude": base_lon}])
 
 # Interface components layout for Part 2
-col_map_big, col_stats = st.columns([2, 1])
+col_map_big, col_stats = st.columns(2)
 
 with col_map_big:
     st.subheader("🗺️ Remote Sensing Spatial Coverage Grid Cell")
     
-    # Render map using mapbox path strings to simulate polygon bounding vectors
+    # Draws a closed bounding box polygon line
     fig_poly = px.line_mapbox(
         df_polygon,
         lat="Latitude",
@@ -181,13 +181,14 @@ with col_map_big:
         zoom=11,
         height=500
     )
-    # Add data point markers styling and color parameters
+    # Adds a distinct center point tracking anchor point
     fig_poly.add_trace(px.scatter_mapbox(
-        df_polygon, 
+        df_center, 
         lat="Latitude", 
         lon="Longitude", 
+        hover_name="Point",
         color_discrete_sequence=["#FF6B00"]
-    ).data[0])
+    ).data)
     
     fig_poly.update_layout(
         mapbox_style="open-street-map",
@@ -198,7 +199,7 @@ with col_map_big:
 with col_stats:
     st.subheader("📋 Grid Telemetry Analysis")
     
-    # Informative structural presentation metric boxes
+    # Presentation metric fields tracking dynamic calculation state
     st.metric(label="Calculated Drought Boundary Status (D³)", value=current_drought)
     st.metric(label="Integrated Remote Sensing Surface VWC", value=f"{avg_surface_moisture}%")
     st.metric(label="Depth-Corrected Calibration Multiplier", value=f"{st.session_state['calibration_factor']:.2f}x")
@@ -213,11 +214,11 @@ with col_stats:
       * West Limit: `""" + f"{base_lon - offset:.4f}" + """`
     """)
     
-    # Export system log report option
+    # CSV generation export button setup
     csv_poly_data = df_polygon.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Polygon Bounding Box Vectors (CSV)",
-        data=csv_data if 'csv_data' in locals() else csv_poly_data,
+        data=csv_poly_data,
         file_name=f"UTRGV_Drought_Polygon_Grid_{datetime.date.today()}.csv",
         mime='text/csv',
         use_container_width=True
