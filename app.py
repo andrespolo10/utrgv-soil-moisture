@@ -3,9 +3,7 @@ import requests
 import pandas as pd
 import io
 import datetime
-import 
-plotly.express
- as px
+import plotly.express as px
 
 # Professional page configuration for institutional web
 st.set_page_config(
@@ -48,7 +46,7 @@ st.markdown("""
         <div class="utrgv-title">🍊 UTRGV Soil Moisture Scaling Tool</div>
         <div class="utrgv-subtitle">School of Earth, Environmental, and Marine Sciences | ACIS & D³ Data Hub</div>
     </div>
-""", unsafe_allowed_html=True)
+""", unsafe_allow_html=True)
 
 # --- MULTI-PROGRAM DATA ENGINE (NASA, USDA, ACIS, D³) ---
 def fetch_climate_data(lat, lon):
